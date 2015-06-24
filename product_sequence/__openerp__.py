@@ -34,10 +34,6 @@
     'data': [
         'data/product_sequence.xml',
     ],
-    'demo': [
-        'demo/product_product.xml'
-    ],
-    'pre_init_hook': 'update_null_and_slash_codes',
     'auto_install': False,
     'installable': True,
 }
