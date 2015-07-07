@@ -35,32 +35,33 @@ class ProductPriceHistory(models.Model):
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
+    @api.multi
+    @api.depends('product_tmpl_id.seller_ids')
     def _compute_seller_ids(self):
         for product in self:
-            product.computed_seller_ids = product.seller_ids.filtered(
+            product.seller_ids = product.product_tmpl_id.seller_ids.filtered(
                 lambda r: not r.variant_id or r.variant_id == product)
+            product.seller_id = (product.seller_ids and
+                                 product.seller_ids[0].name or
+                                 self.env['res.partner'])
 
     def _search_seller_ids(self):
         return [('product_tmpl_id', 'in',
-                 set(p.product_tmpl_id.id for p in self)),
+                 list(set(p.product_tmpl_id.id for p in self))),
                 '|', ('variant_id', '=', False),
                 ('variant_id', 'in', self.ids)]
 
-    def _write_seller_ids(self):
-        for product in self:
-            for supplier in self.computed_seller_ids:
-                if not supplier.product_tmpl_id:
-                    supplier.product_tmpl_id = product.product_tmpl_id
-                    supplier.variant_id = product.id
-                    supplier.create()
-                else:
-                    supplier.write()
-
-        return True
+    @api.multi
+    def write(self, vals):
+        if 'seller_ids' in vals:
+            pt_vals = {'seller_ids': vals['seller_ids']}
+            tmpls = self.mapped('product_tmpl_id')
+            tmpls.write(pt_vals)
+        return super(ProductProduct, self).write(vals)
 
     # Due to the way product inherits from product template
     # all existing code (at least in official addons) accesses
-    # via product.standard_price will receive this rather than
+    # via product.<field> and will receive this rather than
     # the template variable of the same name
     standard_price = fields.Float(
         digits_compute=dp.get_precision('Product Price'),
@@ -71,14 +72,21 @@ class ProductProduct(models.Model):
         string="Cost Price",
         company_dependent=True)
 
-    # computed_seller_ids = fields.One2many(
-    #     comodel_name='product.supplierinfo',
-    #     inverse_name='variant_id',
-    #     string='Suppliers',
-    #     compute='_compute_seller_ids',
-    #     search='_search_seller_ids',
-    #     inverse='_write_seller_ids'
-    # )
+    seller_ids = fields.One2many(
+        comodel_name='product.supplierinfo',
+        inverse_name='variant_id',
+        string='Suppliers',
+        compute='_compute_seller_ids',
+        search='_search_seller_ids',
+    )
+
+    seller_id = fields.Many2one(
+        comodel_name='res.partner',
+        string='Main Supplier',
+        help="Main Supplier who has highest priority in Supplier List.",
+        store=True,
+        compute='_compute_seller_ids'
+    )
 
 
 class ProductTemplate(models.Model):
@@ -100,6 +108,3 @@ class ProductSupplierinfo(models.Model):
     variant_id = fields.Many2one(
         comodel_name='product.product',
         string='Product')
-
-
-

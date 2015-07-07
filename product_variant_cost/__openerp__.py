@@ -28,9 +28,10 @@
  'license': 'AGPL-3',
  'category': 'Product',
  'summary': 'Allows to calculate products cost at variant level.',
- 'depends': ['product',
+ 'depends': ['product', 'stock_account'
              ],
  'data': ['views/product_view.xml',
           ],
+ 'post_init_hook': 'update_existing_costs',
  'installable': True,
  }

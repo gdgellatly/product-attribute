@@ -7,11 +7,46 @@
             <field name="model">product.product</field>
             <field name="inherit_id" ref="product.product_normal_form_view"/>
             <field name="arch" type="xml">
-                    <field name="seller_ids" position="attributes">
-                        <attribute name="context">{'default_variant_id': id}</attribute>
-                        <attribute name="domain">['|', ('variant_id', '=', False), ('variant_id', '=', id)]</attribute>
-                    </field>
-        </field>
+                <xpath expr="//field[@name='seller_ids']" position="attributes">
+                    <attribute name="context">{'default_variant_id': id,
+                        'default_product_tmpl_id': product_tmpl_id}</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="product_template_only_form_view" model="ir.ui.view">
+            <field name="name">product.template.product.form</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='seller_ids']" position="attributes">
+                    <attribute name="context">{'default_variant_id': False,
+                        'default_product_tmpl_id': id}</attribute>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="product_supplierinfo_form_view" model="ir.ui.view">
+            <field name="name">product.supplierinfo.form.view</field>
+            <field name="model">product.supplierinfo</field>
+            <field name="inherit_id" ref="product.product_supplierinfo_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='product_code']" position="after">
+                    <field name="variant_id" domain="[('product_tmpl_id', '=', product_tmpl_id)]" />
+                    <field name="product_tmpl_id" invisible="1"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="product_supplierinfo_tree_view" model="ir.ui.view">
+            <field name="name">product.supplierinfo.tree.view</field>
+            <field name="model">product.supplierinfo</field>
+            <field name="inherit_id" ref="product.product_supplierinfo_tree_view"/>
+            <field name="arch" type="xml">
+                    <xpath expr="//field[@name='name']" position="after">
+                        <field name="variant_id"/>
+                    </xpath>
+            </field>
         </record>
 
     </data>
