@@ -20,7 +20,11 @@
 #
 ##############################################################################
 
+from random import randint
 from openerp.tests.common import TransactionCase
+from openerp.exceptions import ValidationError
+
+partner_names = ['vc_supplier_1', 'vc_supplier_2', 'vc_supplier_3']
 
 class ProductVariantCase(TransactionCase):
 
@@ -30,27 +34,58 @@ class ProductVariantCase(TransactionCase):
         self.template = self.env.ref(
             'product.product_product_4_product_template')
         self.products = self.template.product_variant_ids
-        partner_obj = self.env['res.partner']
 
+        self.unlink = False
+        partner_obj = self.env['res.partner']
         partners = partner_obj.search([('supplier', '=', True)])
         if len(partners) < 3:
-            for partner in ['supplier_1', 'supplier_2', 'supplier_3']:
+            for partner in partner_names:
                 partner_obj.create({'supplier': 1, 'name': partner})
             partners = partner_obj.search([('supplier', '=', True)])
+            self.unlink = True
         self.partners = partners
 
-    def test01a_set_cost_price_direct_write(self):
+    # def tearDown(self):
+    #     if self.unlink:
+    #         partner_obj = self.env['res.partner']
+    #         partners = partner_obj.search([('name', 'in', partner_names)])
+    #         partners.unlink()
+
+    def test01a_set_get_cost_price_directly(self):
+        """
+        Test the setting and getting of costs via a direct write then
+        retrieval via both a direct read and pricelist read
+        """
+        pricelist = self.env.ref('purchase.list0')
         for cost_method in self.cost_methods:
             self.products[0].product_tmpl_id.cost_method = cost_method
+
             with self.subTest(cost_method=cost_method):
+                comparison_costs = self.products.mapped('standard_price')
                 for extra, product in enumerate(self.products, 1):
                     product.standard_price = product.standard_price + extra
                 new_costs = self.products.mapped('standard_price')
                 # Just in case behaviour of mapped changes to remove duplicates
                 # which will render next assertion pointless
                 self.assertTrue(len(new_costs), len(self.products))
-                # Ensure that each cost is different
-                self.assertTrue(len(new_costs), len(set(new_costs)))
+
+                # Ensure that each cost is changed
+                for idx, cost in enumerate(comparison_costs):
+                    self.assertFalse(cost == new_costs[idx])
+                    self.assertTrue(new_costs[idx] == cost + idx + 1)
+
+                p_get_res = self.products.price_get(ptype='standard_price')
+                new_costs = [p_get_res[p.id] for p in self.products]
+                for idx, cost in enumerate(comparison_costs):
+                    self.assertFalse(cost == new_costs[idx])
+                    self.assertTrue(new_costs[idx] == cost + idx + 1)
+
+                prod_qty_partner = [(x, 1.0, None) for x in self.products]
+                res = pricelist.price_get_multi(prod_qty_partner)
+                new_costs = [res[p.id][pricelist.id]for p in self.products]
+                for idx, cost in enumerate(comparison_costs):
+                    self.assertFalse(cost == new_costs[idx])
+                    self.assertTrue(new_costs[idx] == cost + idx + 1)
 
     def test01b_set_cost_price_via_update_wizard(self):
         """
@@ -68,30 +103,66 @@ class ProductVariantCase(TransactionCase):
         For non supported operations an exception should be raised.
         :return:
         """
-        def test01b_standard():
-            pass
+        def test01b_wiz_standard():
+            wiz = cost_wizard.with_context(
+                active_id=self.products[0].id,
+                active_model='product.product').create({})
+            wiz.new_price = new_price
+            wiz.change_price()
+            self.assertEqual(wiz.new_price, self.products[0].standard_price)
 
-        def test01b_average():
-            pass
+        def test01b_func_standard():
+            self.products[0].do_change_standard_price(new_price)
+            self.assertEqual(new_price, self.products[0].standard_price)
 
-        def test01b_real():
-            pass
+        def test01b_wiz_average():
+            wiz = cost_wizard.with_context(
+                active_id=self.products[0].id,
+                active_model='product.product').create({})
+            wiz.new_price = new_price
+            wiz.change_price()
+            self.assertEqual(wiz.new_price, self.products[0].standard_price)
+
+        def test01b_func_average():
+            self.products[0].do_change_standard_price(new_price)
+            self.assertEqual(new_price, self.products[0].standard_price)
+
+        def test01b_wiz_real():
+            wiz = cost_wizard.with_context(
+                active_id=self.products[0].id,
+                active_model='product.product').create({})
+            wiz.new_price = new_price
+            self.assertRaises(
+                ValidationError,
+                wiz.change_price)
+
+        def test01b_func_real():
+            self.products[0].do_change_standard_price(new_price)
+            self.assertRaises(
+                ValidationError,
+                self.products[0].do_change_standard_price, (new_price,))
 
         #make sure that non realtime fails
 
         #test changing at template_level
 
         #test changing at product level
+        cost_wizard = self.env['stock.change.standard.price']
         for cost_method in self.cost_methods:
             self.products[0].product_tmpl_id.cost_method = cost_method
             with self.subTest(cost_method=cost_method):
-                func = eval('test01b_%s' % cost_method)
+                compare_cost = new_price = self.products[1].standard_price
+                while new_price == compare_cost:
+                    new_price = (randint(100, 500) / 100.0)
+                eval('test01b_wiz_%s' % cost_method)
+                # make sure comparison has not changed
+                self.assertEqual(compare_cost, self.products[1].standard_price)
 
-    def test02a_get_cost_price_directly(self):
-        pass
-
-    def test03a_get_cost_price_from_pricelist(self):
-        pass
+                new_price = (randint(501, 1000) / 100.0)
+                while new_price == compare_cost:
+                    new_price = (randint(501, 1000) / 100.0)
+                eval('test01b_func_%s' % cost_method)
+                self.assertEqual(compare_cost, self.products[1].standard_price)
 
     def test05_set_product_price_history(self):
         pass
@@ -102,6 +173,7 @@ class ProductVariantCase(TransactionCase):
             self.assertEqual(len(tmpl.seller_ids), 3)
             self.assertEqual(len(product_1.seller_ids), 2)
             self.assertEqual(len(product_2.seller_ids), 2)
+            self.assertEqual(len(product_3.seller_ids), 1)
 
             # Each product has the correct main seller
             self.assertEqual(product_1.seller_id, partners[0])
@@ -147,7 +219,6 @@ class ProductVariantCase(TransactionCase):
     def test06_get_product_price_history(self):
         pass
 
-    def test07_get_supplierinfo(self):
-        pass
+
 
 

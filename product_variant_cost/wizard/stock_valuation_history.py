@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-
 ##############################################################################
 #
-#    OpenERP, Open Source Management Solution
-#    Copyright (C) 2013 Savoir-faire Linux (<http://www.savoirfairelinux.com>).
-#    Copyright (C) 2015 Akretion (<http://www.akretion.com>).
+#    OpenERP / Odoo, Open Source Management Solution - module extension
+#    Copyright (C) 2014- O4SB (<http://openforsmallbusiness.co.nz>).
+#    Author Graeme Gellatly <g@o4sb.com>
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Affero General Public License as
@@ -21,17 +20,21 @@
 #
 ##############################################################################
 
-{'name': 'Cost at Product Variant Level',
- 'version': '0.1',
- 'author': 'Odoo Community Association (OCA)',
- 'website': 'http://www.o4sb.com',
- 'license': 'AGPL-3',
- 'category': 'Product',
- 'summary': 'Allows to calculate products cost at variant level.',
- 'depends': ['product', 'stock_account', 'purchase'
-             ],
- 'data': ['views/product_view.xml',
-          ],
- 'post_init_hook': 'update_existing_costs',
- 'installable': True,
- }
+from openerp import api, fields, models
+
+
+class StockHistory(models.Model):
+    _inherit = 'stock.history'
+
+    def _get_inventory_value(self):
+        date = self._context.get('history_date')
+        res = {}
+        for line in self:
+            if line.product_id.cost_method == 'real':
+                res[line.id] = line.quantity * line.price_unit_on_quant
+            else:
+                res[line.id] = line.quantity * line.product_id.get_history_price(
+                    line.company_id.id, date=date)
+        return res
+
+    inventory_value = fields.Float(compute='_get_inventory_value')
