@@ -31,6 +31,7 @@
  'depends': ['product', 'stock_account', 'purchase'
              ],
  'data': ['views/product_view.xml',
+          'views/price_history_view.xml'
           ],
  'post_init_hook': 'update_existing_costs',
  'installable': True,

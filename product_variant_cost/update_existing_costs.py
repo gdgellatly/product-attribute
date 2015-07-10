@@ -17,6 +17,13 @@ DELETE FROM ir_property
 WHERE name='standard_price' AND res_id LIKE 'product.product%';""")
 
     cr.execute("""
+UPDATE product_price_history SET product_id=p.id
+FROM product_product p, product_template pt
+WHERE p.product_tmpl_id=pt.id
+AND pt.variant_count = 1
+AND product_price_history.product_template_id=pt.id""")
+
+    cr.execute("""
 INSERT INTO ir_property (name, type, company_id, fields_id, res_id, value_float)
 SELECT 'standard_price', 'float', irp.company_id, f.id,
 'product.product,' || p.id, irp.value_float
