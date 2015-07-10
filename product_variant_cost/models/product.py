@@ -139,6 +139,19 @@ class ProductProduct(models.Model):
             return history_ids[0]['cost']
         return 0.0
 
+    @api.multi
+    def open_product_historic_prices(self):
+        product_tmpl_ids = self.env['product.template']
+        for product in self:
+            product_tmpl_ids |= product.product_tmpl_id
+        res = self.env['ir.actions.act_window'].for_xml_id(
+            'product_variant_cost', 'action_price_history')
+        res['domain'] = (
+            (res.get('domain', []) or []) +
+            [('product_template_id', 'in', product_tmpl_ids.ids)] +
+            [('product_id', 'in', self.ids)])
+        return res
+
     @api.one
     def _get_price_change_accounts(self):
         """
@@ -224,6 +237,14 @@ class ProductTemplate(models.Model):
             record.product_variant_ids.do_change_standard_price(new_price)
             record.write({'standard_price': new_price})
         return True
+
+    @api.multi
+    def open_product_historic_prices(self):
+        res = self.env['ir.actions.act_window'].for_xml_id(
+            'product_variant_cost', 'action_price_history')
+        res['domain'] = ((res.get('domain', []) or []) +
+                         [('product_template_id', 'in', self.ids)])
+        return res
 
     def _set_standard_price(self, value):
         pass
